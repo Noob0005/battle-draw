@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Battle Draw</title>
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo" aria-hidden="true"></span>Battle Draw</div>
+    <nav class="seg" id="modes" aria-label="Battle mode">
+      <button data-mode="ffa" class="on">Free-for-all</button>
+      <button data-mode="teams2">2 teams</button>
+      <button data-mode="teams3">3 teams</button>
+    </nav>
+    <div class="tools">
+      <span class="field-count" id="count">0 on the field</span>
+      <button class="icon" id="undoBtn" title="Undo (Ctrl+Z)" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+      <button class="icon" id="clearBtn" title="Clear field (C)" aria-label="Clear field"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6.5 7l1 13h9l1-13"/></svg></button>
+      <button class="icon" id="pauseBtn" title="Pause (Space)" aria-label="Pause"><svg viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></svg></button>
+      <button class="icon" id="soundBtn" title="Sound (M)" aria-label="Toggle sound"><svg viewBox="0 0 24 24"><path d="M4 9.5v5h3.5L12 18V6L7.5 9.5z"/><path d="M15.5 9a4 4 0 0 1 0 6"/></svg></button>
+    </div>
+  </header>
+
+  <main class="stage" id="stage">
+    <canvas id="field" aria-label="Battlefield"></canvas>
+    <div class="scores" id="scores" hidden></div>
+    <button class="start" id="startBtn" hidden>Start battle</button>
+    <div class="toast" id="toast" role="status"></div>
+
+    <div class="result" id="result" hidden>
+      <div class="card">
+        <h2 id="resTitle"></h2>
+        <p id="resSub"></p>
+        <p class="mvp" id="resMvp"></p>
+        <div class="row">
+          <button class="btn" id="closeBtn">Close</button>
+          <button class="btn primary" id="againBtn">New battle</button>
+        </div>
+      </div>
+    </div>
+
+    <section class="palette" aria-label="Units">
+      <div class="palette-top">
+        <div class="seg" id="cats"></div>
+        <div class="seg">
+          <button id="brushBtn" class="on">Brush</button>
+          <button id="eraseBtn">Eraser</button>
+        </div>
+      </div>
+      <div class="units" id="units"></div>
+    </section>
+  </main>
+</body>
+</html>
