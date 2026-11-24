@@ -1,6 +1,6 @@
 // sim.js: battle rules and unit AI. Pure JavaScript with no DOM access.
 //
-// There is no automatic winner. Units keep fighting (or celebrating) until the
+// There is no automatic winner. Units keep fighting (or standing guard) until the
 // player calls finish(), which ranks the groups by fighter count, then by total
 // health. A group is a unit type in free-for-all, or a team in team modes.
 import { UNITS } from './units.js';
@@ -78,7 +78,8 @@ export class World {
       id, type, def, team, x, y, r: def.r, hp, maxHp: hp, dead: false,
       face: team === 'red' ? -1 : 1, aim: team === 'red' ? Math.PI : 0,
       cd: rand(0, 0.2), retarget: Math.random() * 0.15, target: null,
-      walk: rand(0, 6), bob: rand(0, 6), moving: false, cheer: false,
+      walk: rand(0, 6), bob: rand(0, 6), moving: false,
+      scanT: rand(0, 2), lookAt: null, wander: 0, wanderDir: 0,
       atk: 0, recoil: 0, lunge: 0, flash: 0, muzzle: 0, poison: 0,
       charged: !!def.charge,
     };
@@ -213,8 +214,10 @@ export class World {
       u.target = this.nearestFoe(u);
     }
     const t = u.target;
-    u.cheer = !t; // no rivals left on the field: celebrate until one is deployed
-    if (!t) return;
+    if (!t) {
+      this.idle(u, dt); // no rivals on the field: stand guard until one is deployed
+      return;
+    }
 
     u.aim += angleDiff(Math.atan2(t.y - u.y, t.x - u.x), u.aim) * Math.min(1, dt * 14);
     u.face = Math.cos(u.aim) < 0 ? -1 : 1;
@@ -226,6 +229,30 @@ export class World {
       u.cd = d.atk * rand(0.9, 1.1);
       if (d.proj) this.shoot(u, t);
       else this.strike(u, t);
+    }
+  }
+
+  /* Nothing to fight: stand still, sweep the aim around now and then to look for enemies,
+     and sometimes take a short step. */
+  idle(u, dt) {
+    u.scanT -= dt;
+    if (u.scanT <= 0) {
+      u.scanT = 1.5 + Math.random() * 2.5;
+      u.lookAt = Math.random() < 0.6 ? rand(-Math.PI, Math.PI) : null;
+      u.wander = Math.random() < 0.35 ? rand(0.5, 1.2) : 0;
+      u.wanderDir = rand(-Math.PI, Math.PI);
+    }
+    if (u.lookAt !== null) {
+      u.aim += angleDiff(u.lookAt, u.aim) * Math.min(1, dt * 3);
+      u.face = Math.cos(u.aim) < 0 ? -1 : 1;
+    }
+    if (u.wander > 0) {
+      u.wander -= dt;
+      u.moving = true;
+      u.walk += dt * 8;
+      const sp = u.def.speed * 0.25;
+      u.x = clamp(u.x + Math.cos(u.wanderDir) * sp * dt, u.r, this.W - u.r);
+      u.y = clamp(u.y + Math.sin(u.wanderDir) * sp * dt, u.r, this.H - u.r);
     }
   }
 

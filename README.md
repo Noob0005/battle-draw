@@ -14,7 +14,7 @@ Open http://localhost:3000. Change the port with `PORT=8080 npm start`.
 
 - The field starts empty. Deploy fighters wherever you like.
 - Rival groups fight on contact. Nothing ends the battle on its own.
-- When only one group is left, its fighters celebrate. Deploying a new group starts the fight again.
+- When only one group is left, its fighters stand guard, sweeping their aim to look for enemies. Deploying a new group starts the fight again.
 - Press **Finish battle** (or F) whenever you want the verdict:
   1. The group with the most fighters wins.
   2. If fighter counts tie, the group with more total health wins.
