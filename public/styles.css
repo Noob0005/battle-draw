@@ -61,18 +61,12 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   display: block; touch-action: none; cursor: crosshair;
 }
 
-.scores { position: absolute; top: 12px; left: 12px; display: flex; gap: 6px; pointer-events: none; }
+.scores { position: absolute; top: 12px; left: 12px; display: flex; gap: 6px; pointer-events: none; flex-wrap: wrap; max-width: 60%; }
 .score {
   display: flex; align-items: center; gap: 7px; padding: 6px 12px; border-radius: 999px;
   background: var(--panel); border: 1px solid var(--line); font-weight: 700; font-size: 13px;
 }
 .score i { width: 9px; height: 9px; border-radius: 50%; }
-
-.start {
-  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
-  padding: 11px 30px; border-radius: 999px; background: var(--ink); color: #fff;
-  font-weight: 800; font-size: 15px; box-shadow: 0 8px 20px rgba(20, 22, 28, 0.25);
-}
 
 .toast {
   position: absolute; top: 62px; left: 50%; transform: translate(-50%, -6px);
@@ -81,6 +75,22 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.25s;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* Finish button and standings */
+.finish {
+  padding: 8px 16px; margin-right: 6px; border-radius: 999px;
+  background: var(--red); color: #fff; font-weight: 800; white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(229, 72, 77, 0.28);
+}
+.finish:hover { filter: brightness(1.05); }
+.finish:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
+
+.standings { margin: 4px 0 14px; text-align: left; }
+.standings table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.standings th { color: var(--muted); font-weight: 700; text-align: left; padding: 4px 6px; }
+.standings td { padding: 7px 6px; border-top: 1px solid var(--line); font-weight: 700; color: var(--ink); }
+.standings th:not(:first-child), .standings td:not(:first-child) { text-align: right; }
+.standings td i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; }
 
 /* Result card */
 .result {
@@ -111,7 +121,6 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   display: flex; gap: 6px; margin-top: 8px; padding-bottom: 2px;
   overflow-x: auto; scrollbar-width: thin; transition: opacity 0.2s;
 }
-.units.locked { opacity: 0.4; pointer-events: none; }
 .unit {
   flex: 0 0 auto; width: 74px; padding: 4px 4px 6px; border-radius: 12px;
   border: 1.5px solid transparent; background: #faf9f6;
@@ -128,4 +137,5 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   .field-count { display: none; }
   .seg button { padding: 6px 9px; font-size: 13px; }
   .unit { width: 64px; }
+  .scores { max-width: 100%; }
 }
