@@ -328,7 +328,7 @@ function updateHud() {
   let status = `${world.count} on the field`;
   if (world.over) status = `Battle finished · ${status}`;
   else if (world.paused) status = `Paused · ${status}`;
-  else if (rows.length === 1) status = `${groupName(rows[0].key)} celebrating · ${status}`;
+  else if (rows.length === 1) status = `Only ${groupName(rows[0].key)} left · ${status}`;
   else if (rows.length > 1) status = `Battle live · ${status}`;
   $('#count').textContent = status;
 
