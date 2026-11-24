@@ -59,7 +59,9 @@ function drawUnit(c, u, now, teamMode) {
   const push = Math.max(0, u.lunge) * 20;
   const hover = d.fly ? -14 + Math.sin(now / 300 + u.id) * 2 : 0;
   const x = u.x + Math.cos(u.aim) * push;
-  const y = u.y + bob + Math.sin(u.aim) * push + hover;
+  const cheer = !!u.cheer && !d.structure;
+  const beat = now / 170 + u.id;
+  const y = u.y + bob + Math.sin(u.aim) * push + hover - (cheer ? Math.abs(Math.sin(beat)) * 9 : 0);
 
   // ground shadow and team ring
   c.fillStyle = d.fly ? 'rgba(20,22,28,0.10)' : 'rgba(20,22,28,0.16)';
@@ -74,10 +76,23 @@ function drawUnit(c, u, now, teamMode) {
   }
 
   const aimL = clamp(Math.atan2(Math.sin(u.aim), Math.cos(u.aim) * u.face), -1.2, 1.2);
-  drawSprite(c, u.type, u.team, x, y, s, u.face, {
+  c.save();
+  c.translate(x, y);
+  if (cheer) c.rotate(Math.sin(beat) * 0.12);
+  drawSprite(c, u.type, u.team, 0, 0, s, u.face, {
     walk: u.walk, moving: u.moving, aim: aimL, rec: u.recoil, atk: u.atk,
     muzzle: u.muzzle > 0, t: now / 1000 + u.id,
   });
+  c.restore();
+  if (cheer) {
+    for (let i = 0; i < 3; i++) {
+      const a = beat * 0.7 + i * 2.1;
+      c.fillStyle = ['#ffd94d', '#ff8c42', '#3e7bfa'][i];
+      c.beginPath();
+      c.arc(u.x + Math.cos(a) * u.r * 1.5, y - u.r * 2.6 + Math.sin(a * 1.3) * 3, 2.2, 0, TAU);
+      c.fill();
+    }
+  }
 
   if (u.flash > 0) {
     c.globalAlpha = Math.min(0.85, u.flash * 9);

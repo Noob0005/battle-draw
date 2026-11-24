@@ -1,4 +1,8 @@
 // sim.js: battle rules and unit AI. Pure JavaScript with no DOM access.
+//
+// There is no automatic winner. Units keep fighting (or celebrating) until the
+// player calls finish(), which ranks the groups by fighter count, then by total
+// health. A group is a unit type in free-for-all, or a team in team modes.
 import { UNITS } from './units.js';
 
 const HP_SCALE = 2.8; // HP goes up and damage down so fights last
@@ -29,7 +33,6 @@ export class World {
 
   get teamMode() { return this.mode !== 'ffa'; }
   get count() { return this.units.length + this.traps.length; }
-  get canPaint() { return !(this.teamMode && this.started); }
 
   setSize(w, h) {
     this.W = Math.max(300, w);
@@ -45,11 +48,9 @@ export class World {
   reset() {
     Object.assign(this, {
       units: [], traps: [], shots: [], parts: [], ghosts: [], kills: [], sounds: [],
-      time: 0, shake: 0, started: false, paused: false, over: null,
+      time: 0, shake: 0, paused: false, over: null,
     });
   }
-
-  rearm() { Object.assign(this, { started: false, paused: false, over: null, time: 0, kills: [] }); }
 
   teamOf(x, type) {
     if (this.mode === 'teams2') return x < this.W / 2 ? 'red' : 'blue';
@@ -61,13 +62,9 @@ export class World {
   foe(a, b) { return this.teamMode ? a.team !== b.team : a.type !== b.type; }
   fighters() { return this.units.filter((u) => !u.dead && !u.def.structure); }
   teamAlive(t) { return this.fighters().filter((u) => u.team === t).length; }
+  groupOf(u) { return this.teamMode ? u.team : u.type; }
 
-  canStart() {
-    if (this.teamMode) return this.activeTeams().filter((t) => this.teamAlive(t) > 0).length >= 2;
-    return new Set(this.fighters().map((u) => u.type)).size >= 2;
-  }
-
-  /* ---------- painting & editing ---------- */
+  /* ---------- placing and editing ---------- */
 
   add(type, team, x, y) {
     const def = UNITS[type], id = seq++;
@@ -81,7 +78,7 @@ export class World {
       id, type, def, team, x, y, r: def.r, hp, maxHp: hp, dead: false,
       face: team === 'red' ? -1 : 1, aim: team === 'red' ? Math.PI : 0,
       cd: rand(0, 0.2), retarget: Math.random() * 0.15, target: null,
-      walk: rand(0, 6), bob: rand(0, 6), moving: false,
+      walk: rand(0, 6), bob: rand(0, 6), moving: false, cheer: false,
       atk: 0, recoil: 0, lunge: 0, flash: 0, muzzle: 0, poison: 0,
       charged: !!def.charge,
     };
@@ -89,8 +86,11 @@ export class World {
     return u;
   }
 
+  /* Deploy one unit from the brush. Deploying after a finished battle starts a new one.
+     Returns false when the field is full. */
   paint(type, x, y, jitter) {
-    if (!this.canPaint || this.count >= MAX_ENTITIES) return;
+    if (this.count >= MAX_ENTITIES) return false;
+    if (this.over) this.resume();
     const def = UNITS[type], j = def.structure || def.trap ? 0 : jitter;
     this.add(
       type,
@@ -98,7 +98,10 @@ export class World {
       clamp(x + rand(-j, j), 14, this.W - 14),
       clamp(y + rand(-j, j), 14, this.H - 14),
     );
+    return true;
   }
+
+  resume() { Object.assign(this, { over: null, paused: false, time: 0, kills: [] }); }
 
   erase(x, y, rad) {
     const near = (o) => (o.x - x) ** 2 + (o.y - y) ** 2 < rad * rad;
@@ -113,23 +116,16 @@ export class World {
 
   load(json) {
     const d = JSON.parse(json);
-    Object.assign(this, { units: [], traps: [], shots: [], parts: [], ghosts: [] });
+    Object.assign(this, { units: [], traps: [], shots: [], parts: [], ghosts: [], over: null, paused: false });
     for (const [t, tm, x, y] of [...d.units, ...d.traps]) this.add(t, tm, x, y);
   }
 
   /* ---------- battle flow ---------- */
 
-  start() {
-    if (this.started || !this.canStart()) return false;
-    Object.assign(this, { started: true, paused: false, over: null, time: 0, kills: [] });
-    return true;
-  }
-
-  togglePause() { if (this.started && !this.over) this.paused = !this.paused; }
+  togglePause() { if (!this.over) this.paused = !this.paused; }
   drainSounds() { const s = this.sounds; this.sounds = []; return s; }
 
   update(dt) {
-    if (this.mode === 'ffa' && !this.started && !this.over && this.canStart()) this.start();
     this.shake = Math.max(0, this.shake - dt * 26);
 
     for (const p of this.parts) {
@@ -143,35 +139,52 @@ export class World {
     for (const g of this.ghosts) g.t += dt;
     this.ghosts = this.ghosts.filter((g) => g.t < g.life);
 
-    if (!this.started) {
+    if (this.paused || this.over) {
       for (const u of this.units) u.bob += dt * 2.2;
       return;
     }
-    if (this.paused || this.over) return;
-
     this.time += dt;
     for (const u of this.units) if (!u.dead) this.think(u, dt);
     this.updateShots(dt);
     this.updateTraps();
     this.units = this.units.filter((u) => !u.dead);
-    this.checkVictory();
   }
 
-  checkVictory() {
-    if (this.teamMode) {
-      const alive = this.activeTeams().filter((t) => this.teamAlive(t) > 0);
-      if (alive.length === 1) this.end({ kind: 'team', key: alive[0] });
-      else if (!alive.length) this.end({ kind: 'draw' });
-      return;
+  /* Every group with fighters on the field, strongest first: most fighters, then most total health. */
+  standings() {
+    const rows = new Map();
+    for (const u of this.fighters()) {
+      const key = this.groupOf(u);
+      const row = rows.get(key) || { key, count: 0, hp: 0 };
+      row.count += 1;
+      row.hp += Math.max(0, Math.ceil(u.hp));
+      rows.set(key, row);
     }
-    const types = [...new Set(this.fighters().map((u) => u.type))];
-    if (types.length === 1) this.end({ kind: 'type', key: types[0] });
-    else if (!types.length) this.end({ kind: 'draw' });
+    return [...rows.values()].sort((a, b) => b.count - a.count || b.hp - a.hp);
   }
 
-  end(result) {
-    Object.assign(this, { over: result, paused: false });
-    this.sounds.push(result.kind === 'draw' ? 'die' : 'win');
+  /* Ends the battle and returns the verdict. Only the player calls this. */
+  finish() {
+    const rows = this.standings();
+    const [a, b] = rows;
+    let verdict;
+    if (!a) {
+      verdict = { kind: 'draw', reason: 'empty', rows };
+    } else {
+      const tied = rows.filter((r) => r.count === a.count && r.hp === a.hp);
+      if (tied.length > 1) {
+        verdict = { kind: 'draw', reason: 'equal', rows, tied: tied.map((r) => r.key), count: a.count, hp: a.hp };
+      } else if (!b) {
+        verdict = { kind: 'win', reason: 'alone', winner: a.key, rows };
+      } else if (a.count !== b.count) {
+        verdict = { kind: 'win', reason: 'count', winner: a.key, rows };
+      } else {
+        verdict = { kind: 'win', reason: 'health', winner: a.key, rows };
+      }
+    }
+    Object.assign(this, { over: verdict, paused: false });
+    this.sounds.push(verdict.kind === 'win' ? 'win' : 'die');
+    return verdict;
   }
 
   /* ---------- unit AI ---------- */
@@ -200,6 +213,7 @@ export class World {
       u.target = this.nearestFoe(u);
     }
     const t = u.target;
+    u.cheer = !t; // no rivals left on the field: celebrate until one is deployed
     if (!t) return;
 
     u.aim += angleDiff(Math.atan2(t.y - u.y, t.x - u.x), u.aim) * Math.min(1, dt * 14);
@@ -336,8 +350,7 @@ export class World {
     this.traps = this.traps.filter((m) => !m.dead);
   }
 
-  /* ---------- damage & effects (no damage numbers are produced) ---------- */
-
+  /* Damage is applied silently: no numbers are produced, only HP bars and flashes. */
   hurt(u, amt, killer) {
     if (!u || u.dead) return;
     u.hp -= amt;
@@ -380,6 +393,4 @@ export class World {
       });
     }
   }
-
-  summaryKills() { return this.kills.filter((k) => k.type); }
 }
