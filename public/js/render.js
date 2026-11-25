@@ -15,13 +15,61 @@ const RING = {
 };
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
+/* Pre-drawn poses. A character's look depends on a few quantised values (walk
+   frame, aim, recoil, attack, muzzle flash), so each combination is drawn once
+   into a small bitmap and reused for every unit that shares it. Characters whose
+   drawing reads the clock are drawn live. */
+const TIME_DRIVEN = new Set(['snake', 'dragon', 'mine']);
+const WALK_FRAMES = 12;
+const BAKE = 96;          // logical size of a cached pose, centred on the unit
+const BAKE_SCALE = 1.25;  // bitmap pixels per logical unit
+const CACHE_LIMIT = 400;  // bitmaps kept at once; the cache clears when full
+const POSES = new Map();
+
+const wrap = (v) => ((v % TAU) + TAU) % TAU;
+
+function bakePose(type, team, state) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = Math.ceil(BAKE * BAKE_SCALE);
+  const g = cv.getContext('2d');
+  const h = (BAKE / 2) * BAKE_SCALE;
+  g.setTransform(BAKE_SCALE, 0, 0, BAKE_SCALE, h, h);
+  ART[type](g, PAL[team], state);
+  return cv;
+}
+
+function pose(type, team, a) {
+  const wi = a.moving ? Math.round((wrap(a.walk) / TAU) * WALK_FRAMES) % WALK_FRAMES : -1;
+  const aimQ = Math.round((a.aim || 0) * 10);
+  const recQ = Math.round((a.rec || 0) * 4);
+  const atkQ = Math.round((a.atk || 0) * 8);
+  const muz = a.muzzle ? 1 : 0;
+  const key = `${type}|${team}|${wi}|${aimQ}|${recQ}|${atkQ}|${muz}`;
+  let bmp = POSES.get(key);
+  if (!bmp) {
+    if (POSES.size >= CACHE_LIMIT) POSES.clear();
+    bmp = bakePose(type, team, {
+      walk: wi < 0 ? 0 : (wi / WALK_FRAMES) * TAU,
+      moving: wi >= 0,
+      aim: aimQ / 10,
+      rec: recQ / 4,
+      atk: atkQ / 8,
+      muzzle: muz === 1,
+      t: 0,
+    });
+    POSES.set(key, bmp);
+  }
+  return bmp;
+}
+
 /* Draw one character. Used for units, mines, ghosts, previews and the cursor. */
 export function drawSprite(c, type, team, x, y, s, face, a, alpha = 1) {
   c.save();
   c.globalAlpha = alpha;
   c.translate(x, y);
   c.scale(face * s, s);
-  ART[type](c, PAL[team], a);
+  if (TIME_DRIVEN.has(type)) ART[type](c, PAL[team], a);
+  else c.drawImage(pose(type, team, a), -BAKE / 2, -BAKE / 2, BAKE, BAKE);
   c.restore();
 }
 
