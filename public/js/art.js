@@ -108,14 +108,16 @@ function gunAt(c, a, T, len, scope) {
 
 export const ART = {
   soldier(c, T, a) {
+    // Legs are as long as the hip-to-ground distance, so they are straight when
+    // standing. The knee only bends when a foot is lifted for a step.
     const th = a.moving ? a.walk : 0;
-    const hips = { L: [-2.4, 3], R: [2.4, 3] };
+    const hips = { L: [-2.4, 1.8], R: [2.4, 1.8] };
     const feet = {
-      L: [hips.L[0] + 2 + Math.sin(th) * 3.6, 13.5 - Math.max(0, Math.cos(th)) * 2.6],
-      R: [hips.R[0] + 2 + Math.sin(th + Math.PI) * 3.6, 13.5 - Math.max(0, -Math.cos(th)) * 2.6],
+      L: [hips.L[0] + Math.sin(th) * 3.2, 13.5 - Math.max(0, Math.cos(th)) * 2.6],
+      R: [hips.R[0] + Math.sin(th + Math.PI) * 3.2, 13.5 - Math.max(0, -Math.cos(th)) * 2.6],
     };
     for (const [side, col] of [['R', '#2f343c'], ['L', '#3b4048']]) {
-      const { e, end } = ik2(hips[side], feet[side], 6, 6, -1);
+      const { e, end } = ik2(hips[side], feet[side], 5.85, 5.85, -1);
       limb(c, [hips[side], e, end], col, 3.6);
       box(c, end[0] - 3.6, end[1] - 0.7, 8, 3.4, 1.5, '#262a31');
     }
