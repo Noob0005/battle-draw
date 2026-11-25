@@ -51,6 +51,23 @@ const dot = (c, x, y, r, col = INK) => {
 };
 const face = (c, x = 0.6, y = -13) => { oval(c, x, y, 5.1, 5.3, SKIN); dot(c, x + 2.6, y + 0.6, 1.1); };
 
+/* Two-bone solve: the joint between a and b bends by l1 and l2; bend picks the side. */
+const ik2 = (a, b, l1, l2, bend) => {
+  let dx = b[0] - a[0], dy = b[1] - a[1];
+  let d = Math.hypot(dx, dy) || 1e-6;
+  const max = l1 + l2 - 0.01;
+  if (d > max) { const k = max / d; dx *= k; dy *= k; d = max; }
+  d = Math.max(d, Math.abs(l1 - l2) + 0.01);
+  const ang = Math.atan2(dy, dx);
+  const A = Math.acos(Math.min(1, Math.max(-1, (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d))));
+  return {
+    e: [a[0] + Math.cos(ang + bend * A) * l1, a[1] + Math.sin(ang + bend * A) * l1],
+    end: [a[0] + Math.cos(ang) * d, a[1] + Math.sin(ang) * d],
+  };
+};
+/* Point (lx, ly) in a frame at origin o, rotated by angle a. */
+const pt = (o, lx, ly, a) => [o[0] + lx * Math.cos(a) - ly * Math.sin(a), o[1] + lx * Math.sin(a) + ly * Math.cos(a)];
+
 /* ---------- shared parts ---------- */
 
 function legs(c, a, col) {
@@ -91,11 +108,49 @@ function gunAt(c, a, T, len, scope) {
 
 export const ART = {
   soldier(c, T, a) {
-    legs(c, a, '#3b4048');
+    const th = a.moving ? a.walk : 0;
+    const hips = { L: [-2.4, 3], R: [2.4, 3] };
+    const feet = {
+      L: [hips.L[0] + 2 + Math.sin(th) * 3.6, 13.5 - Math.max(0, Math.cos(th)) * 2.6],
+      R: [hips.R[0] + 2 + Math.sin(th + Math.PI) * 3.6, 13.5 - Math.max(0, -Math.cos(th)) * 2.6],
+    };
+    for (const [side, col] of [['R', '#2f343c'], ['L', '#3b4048']]) {
+      const { e, end } = ik2(hips[side], feet[side], 6, 6, -1);
+      limb(c, [hips[side], e, end], col, 3.6);
+      box(c, end[0] - 3.6, end[1] - 0.7, 8, 3.4, 1.5, '#262a31');
+    }
+
+    const aim = a.aim || 0, rec = a.rec || 0;
+    const O = [1.5 - 2 * rec * Math.cos(aim), -6 - 2 * rec * Math.sin(aim)];
+    const rear = pt(O, 0.2, 1, aim), fore = pt(O, 6.2, 0.8, aim);
+    const shF = [3.2, -8.2], shR = [-2.4, -8.4];
+    const armR = ik2(shR, rear, 5.6, 5.4, 1), armF = ik2(shF, fore, 5.6, 5.4, 1);
+    limb(c, [shR, armR.e, armR.end], T.d, 3);
+
     torso(c, T);
     face(c);
     cap(c, 0.6, -14.5, 6, Math.PI, 0, T.d); // helmet
-    gunAt(c, a, T, 17, false);
+
+    c.save();
+    c.translate(O[0], O[1]);
+    c.rotate(aim);
+    limb(c, [[-1, 0], [5, 0.6]], T.d, 3.4);
+    line(c, [[-4.5, 1.5], [1, 0.4]], '#7a4e26', 3.8);
+    limb(c, [[1, 0], [17, -0.2]], '#3e434b', 2.8);
+    box(c, 5, -3.2, 4.5, 3, 1, '#2a2e35');
+    if (a.muzzle) { // firing: flash and sparks at the muzzle
+      c.beginPath();
+      c.ellipse(19, -0.2, 4, 2.2, 0, 0, TAU);
+      c.fillStyle = '#ffe27a';
+      c.fill();
+      line(c, [[21, -2.6], [24.5, -4.4]], '#ffe27a', 1);
+      line(c, [[21, 2.2], [24.5, 3.8]], '#ffe27a', 1);
+    }
+    c.restore();
+
+    limb(c, [shF, armF.e, armF.end], T.d, 3);
+    dot(c, armF.end[0], armF.end[1], 1.6, SKIN);
+    dot(c, armR.end[0], armR.end[1], 1.6, SKIN);
   },
 
   sniper(c, T, a) {
