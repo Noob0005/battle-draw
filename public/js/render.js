@@ -14,19 +14,20 @@ const RING = {
   blue: 'rgba(62,123,250,0.5)',
 };
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const wrap = (v) => ((v % TAU) + TAU) % TAU;
 
-/* Pre-drawn poses. A character's look depends on a few quantised values (walk
-   frame, aim, recoil, attack, muzzle flash), so each combination is drawn once
-   into a small bitmap and reused for every unit that shares it. Characters whose
-   drawing reads the clock are drawn live. */
-const TIME_DRIVEN = new Set(['snake', 'dragon', 'mine']);
+/* Pre-drawn poses. Each unit's look depends on a few quantised values. Only the
+   values a unit actually uses go into its key, so an ant is never split by aim.
+   Each combination is drawn once into a small bitmap and reused. */
 const WALK_FRAMES = 12;
+const TIME_FRAMES = { snake: 12, dragon: 8, mine: 2 };
+const AIM_TYPES = new Set(['soldier', 'sniper', 'archer', 'mage']);
+const GUN_TYPES = new Set(['soldier', 'sniper']);
+const ATK_TYPES = new Set(['archer', 'cavalry', 'dragon']);
 const BAKE = 96;          // logical size of a cached pose, centred on the unit
 const BAKE_SCALE = 1.25;  // bitmap pixels per logical unit
 const CACHE_LIMIT = 400;  // bitmaps kept at once; the cache clears when full
 const POSES = new Map();
-
-const wrap = (v) => ((v % TAU) + TAU) % TAU;
 
 function bakePose(type, team, state) {
   const cv = document.createElement('canvas');
@@ -38,13 +39,28 @@ function bakePose(type, team, state) {
   return cv;
 }
 
+/* Time-driven units use a fixed number of frames per cycle, read from the clock. */
+function timeIndex(type, t) {
+  if (type === 'snake') return Math.round((wrap(t * 3) / TAU) * TIME_FRAMES.snake) % TIME_FRAMES.snake;
+  if (type === 'dragon') return Math.round((wrap(t * 9) / TAU) * TIME_FRAMES.dragon) % TIME_FRAMES.dragon;
+  return Math.sin(t * 6) > 0 ? 1 : 0; // mine: blink on or off
+}
+
+/* The clock value to bake for a given frame index, so the drawer shows that frame. */
+function timeState(type, i) {
+  if (type === 'snake') return ((i / TIME_FRAMES.snake) * TAU) / 3;
+  if (type === 'dragon') return ((i / TIME_FRAMES.dragon) * TAU) / 9;
+  return i === 1 ? Math.PI / 12 : 0;
+}
+
 function pose(type, team, a) {
   const wi = a.moving ? Math.round((wrap(a.walk) / TAU) * WALK_FRAMES) % WALK_FRAMES : -1;
-  const aimQ = Math.round((a.aim || 0) * 10);
-  const recQ = Math.round((a.rec || 0) * 4);
-  const atkQ = Math.round((a.atk || 0) * 8);
-  const muz = a.muzzle ? 1 : 0;
-  const key = `${type}|${team}|${wi}|${aimQ}|${recQ}|${atkQ}|${muz}`;
+  const ti = TIME_FRAMES[type] ? timeIndex(type, a.t || 0) : -1;
+  const aimQ = AIM_TYPES.has(type) ? Math.round((a.aim || 0) * 10) : 0;
+  const recQ = GUN_TYPES.has(type) ? Math.round((a.rec || 0) * 4) : 0;
+  const atkQ = ATK_TYPES.has(type) ? Math.round((a.atk || 0) * 8) : 0;
+  const muz = GUN_TYPES.has(type) && a.muzzle ? 1 : 0;
+  const key = `${type}|${team}|${wi}|${ti}|${aimQ}|${recQ}|${atkQ}|${muz}`;
   let bmp = POSES.get(key);
   if (!bmp) {
     if (POSES.size >= CACHE_LIMIT) POSES.clear();
@@ -55,7 +71,7 @@ function pose(type, team, a) {
       rec: recQ / 4,
       atk: atkQ / 8,
       muzzle: muz === 1,
-      t: 0,
+      t: ti < 0 ? 0 : timeState(type, ti),
     });
     POSES.set(key, bmp);
   }
@@ -68,12 +84,15 @@ export function drawSprite(c, type, team, x, y, s, face, a, alpha = 1) {
   c.globalAlpha = alpha;
   c.translate(x, y);
   c.scale(face * s, s);
-  if (TIME_DRIVEN.has(type)) ART[type](c, PAL[team], a);
-  else c.drawImage(pose(type, team, a), -BAKE / 2, -BAKE / 2, BAKE, BAKE);
+  c.drawImage(pose(type, team, a), -BAKE / 2, -BAKE / 2, BAKE, BAKE);
   c.restore();
 }
 
-function drawField(c, w, h, world) {
+/* The static field layer (dots, team tints and the divider) is drawn once per
+   size, mode and team set, then copied each frame. */
+const FIELD = { key: '', canvas: null };
+
+function paintField(c, w, h, world) {
   c.fillStyle = '#f7f6f2';
   c.fillRect(0, 0, w, h);
   c.fillStyle = 'rgba(30,40,60,0.07)';
@@ -99,6 +118,22 @@ function drawField(c, w, h, world) {
   }
   c.stroke();
   c.restore();
+}
+
+function fieldLayer(w, h, dpr, world) {
+  const teams = world.teamMode ? world.activeTeams().join(',') : '';
+  const key = `${w}|${h}|${dpr}|${world.teamMode ? 1 : 0}|${teams}`;
+  if (FIELD.key !== key) {
+    const cv = document.createElement('canvas');
+    cv.width = Math.round(w * dpr);
+    cv.height = Math.round(h * dpr);
+    const g = cv.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    paintField(g, w, h, world);
+    FIELD.key = key;
+    FIELD.canvas = cv;
+  }
+  return FIELD.canvas;
 }
 
 function drawUnit(c, u, now, teamMode) {
@@ -249,14 +284,25 @@ function drawCursor(c, cur, world, now) {
   c.restore();
 }
 
+const SORT = []; // reused each frame so no new array is made
+
 export function render(c, world, cur, now) {
-  drawField(c, world.W, world.H, world);
+  const dpr = c.getTransform().a || 1;
+  const layer = fieldLayer(world.W, world.H, dpr, world);
+  c.save();
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.drawImage(layer, 0, 0);
+  c.restore();
+
   c.save();
   if (world.shake > 0.2) {
     c.translate((Math.random() - 0.5) * world.shake, (Math.random() - 0.5) * world.shake);
   }
   for (const m of world.traps) drawSprite(c, m.type, m.team, m.x, m.y, m.r / 11, 1, { t: now / 1000 + m.id });
-  for (const u of [...world.units].sort((p, q) => p.y - q.y)) drawUnit(c, u, now, world.teamMode);
+  SORT.length = 0;
+  for (const u of world.units) SORT.push(u);
+  SORT.sort((p, q) => p.y - q.y);
+  for (const u of SORT) drawUnit(c, u, now, world.teamMode);
   for (const g of world.ghosts) drawGhost(c, g, now);
   for (const s of world.shots) drawShot(c, s);
   for (const p of world.parts) drawPart(c, p);
