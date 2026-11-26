@@ -21,8 +21,8 @@ const wrap = (v) => ((v % TAU) + TAU) % TAU;
    Each combination is drawn once into a small bitmap and reused. */
 const WALK_FRAMES = 12;
 const TIME_FRAMES = { snake: 12, dragon: 8, mine: 2 };
-const AIM_TYPES = new Set(['soldier', 'sniper', 'archer', 'mage']);
-const GUN_TYPES = new Set(['soldier', 'sniper']);
+const AIM_TYPES = new Set(['soldier', 'sniper', 'archer', 'mage', 'grenadier', 'rifleman', 'marksman', 'heavy', 'medic', 'breacher']);
+const GUN_TYPES = new Set(['soldier', 'sniper', 'grenadier', 'rifleman', 'marksman', 'heavy', 'medic', 'breacher']);
 const ATK_TYPES = new Set(['archer', 'cavalry', 'dragon']);
 const BAKE = 96;          // logical size of a cached pose, centred on the unit
 const BAKE_SCALE = 1.25;  // bitmap pixels per logical unit

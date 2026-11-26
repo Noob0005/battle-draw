@@ -2,6 +2,8 @@
 // is the unit's centre, the figure is about 36 units wide, and it faces +x.
 // render.js scales the figure and mirrors it for left-facing units.
 
+import { drawStanced } from './army.js';
+
 export const PAL = {
   red: { b: '#ef5b4d', d: '#b5382d', l: '#ffb4a9' },
   blue: { b: '#4d8ef2', d: '#2f62b5', l: '#b3d1ff' },
@@ -107,6 +109,14 @@ function gunAt(c, a, T, len, scope) {
 /* ---------- the characters ---------- */
 
 export const ART = {
+  // Approved squad figures, drawn by army.js. The marksman uses the army file's sniper.
+  grenadier(c, T, a) { drawStanced('grenadier', c, T, a); },
+  rifleman(c, T, a) { drawStanced('rifleman', c, T, a); },
+  marksman(c, T, a) { drawStanced('sniper', c, T, a); },
+  heavy(c, T, a) { drawStanced('heavy', c, T, a); },
+  medic(c, T, a) { drawStanced('medic', c, T, a); },
+  breacher(c, T, a) { drawStanced('breacher', c, T, a); },
+
   soldier(c, T, a) {
     // Legs are as long as the hip-to-ground distance, so they are straight when
     // standing. The knee only bends when a foot is lifted for a step.

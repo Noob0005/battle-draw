@@ -1,9 +1,7 @@
 // =============================================================================
 // Army characters (fixed version)
-// Expects the game's existing helpers: paint(c, fill, lw), poly(c, pts, fill, lw),
-// oval(c, x, y, rx, ry, fill, rot), box(c, x, y, w, h, r, fill),
-// line(c, pts, colour, width), dot(c, x, y, r, colour), ik2(a, b, l1, l2, bend),
-// pt(origin, lx, ly, angle), INK, SKIN, TAU
+// The drawing helpers are defined below, local to this module, so there is no import
+// cycle with art.js. ik2 here returns the knee point as [x, y].
 //
 // Changes from the previous version:
 //  - Standing legs are straight. The hip height is solved from the ankle position,
@@ -12,6 +10,31 @@
 //  - One shared leg function (drawBootLeg) is used by all six units.
 // =============================================================================
 
+const INK = '#1c1f24';
+const SKIN = '#f2c79b';
+const TAU = Math.PI * 2;
+function paint(c, fill, lw = 1.3) { c.fillStyle = fill; c.fill(); c.lineWidth = lw; c.strokeStyle = INK; c.stroke(); }
+function poly(c, pts, fill, lw = 1.3) {
+  c.beginPath(); c.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
+  c.closePath(); paint(c, fill, lw);
+}
+function oval(c, x, y, rx, ry, fill, rot = 0) { c.beginPath(); c.ellipse(x, y, rx, ry, rot, 0, TAU); paint(c, fill); }
+function box(c, x, y, w, h, r, fill) { c.beginPath(); c.roundRect(x, y, w, h, r); paint(c, fill); }
+function line(c, pts, colour, width) {
+  c.beginPath(); c.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
+  c.strokeStyle = colour; c.lineWidth = width; c.lineCap = 'round'; c.lineJoin = 'round'; c.stroke();
+}
+function dot(c, x, y, r, colour = INK) { c.beginPath(); c.arc(x, y, r, 0, TAU); c.fillStyle = colour; c.fill(); }
+function pt(o, lx, ly, a) { const ca = Math.cos(a), sa = Math.sin(a); return [o[0] + lx * ca - ly * sa, o[1] + lx * sa + ly * ca]; }
+function ik2(a, b, l1, l2, bend) {
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  const len = Math.hypot(dx, dy) || 1e-6, ux = dx / len, uy = dy / len;
+  const d = Math.min(len, (l1 + l2) * 0.9999);
+  const k = (l1 * l1 - l2 * l2 + d * d) / (2 * d), h = Math.sqrt(Math.max(0, l1 * l1 - k * k));
+  return [a[0] + ux * k - uy * h * bend, a[1] + uy * k + ux * h * bend];
+}
 const LEG_L1 = 5.7, LEG_L2 = 5.8, LEG_REACH = LEG_L1 + LEG_L2;
 // Hips stay fixed. The foot moves +/- WALK_STRIDE around the hip, and the knee bends
 // to follow it. Standing legs sit at full stretch (straight). Tune WALK_STRIDE for more
@@ -165,7 +188,7 @@ function drawBootLeg(c, hip, phase, mv, idleX, col, pocketCol, bootCol, hiCol, b
 // =============================================================================
 // Squad Character Render Methods (Export-Style Object Literal)
 // =============================================================================
-const SQUAD_UNITS = {
+export const SQUAD_UNITS = {
   /**
    * 1. GRENADIER (Approved Olive default palette: { b: '#658354', d: '#3f5734', l: '#9bb889' })
    * Heavy rotary 40mm grenade launcher, rucksack + whip antenna, plate carrier & FAST helmet.
@@ -927,7 +950,7 @@ function drawTracer(c, origin, aim, opt) {
 }
 
 /** Draws a unit standing, with the tracer when a.fire is set. */
-function drawStanced(name, c, T, a) {
+export function drawStanced(name, c, T, a) {
   c.save();
   SQUAD_UNITS[name](c, T, a);
   if (a.fire && TRACER[name]) {
